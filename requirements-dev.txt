@@ -1,6 +1,7 @@
 -r requirements.txt
-basedpyright~=1.28
+basedpyright~=1.29
 mypy[faster-cache]~=1.15
 pre-commit~=4.2
 rich~=13.9
 ruff~=0.11
+types-pyjwt~=1.7

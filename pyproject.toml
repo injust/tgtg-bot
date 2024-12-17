@@ -22,6 +22,7 @@ enable_error_code = [
     "unused-awaitable",
 ]
 strict = true
+warn_unreachable = true
 
 [tool.ruff]
 line-length = 120
@@ -43,10 +44,12 @@ extend-select = [
     "G",     # flake8-logging-format
     "PIE",   # flake8-pie
     "RSE",   # flake8-raise
+    "RET",   # flake8-return
     "SIM",   # flake8-simplify
     "SLOT",  # flake8-slots
     "TID",   # flake8-tidy-imports
     "TD",    # flake8-todos
+    "TC",    # flake8-type-checking
     "ARG",   # flake8-unused-arguments
     "PTH",   # flake8-use-pathlib
     "FLY",   # flynt
