@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from abc import ABC
 from enum import Enum, StrEnum, auto
 from functools import wraps
 from pathlib import Path
@@ -392,7 +393,7 @@ class Reservation:
 
 
 @frozen(kw_only=True)
-class Voucher:
+class Voucher(ABC):
     class State(Enum):
         ACTIVE = auto()
         USED = auto()
@@ -403,6 +404,7 @@ class Voucher:
         USER_REFERRAL = auto()
 
     class Version(Enum):
+        COUNTRY_BASED_SINGLE_USE_VOUCHER = auto()
         CURRENCY_BASED_MULTI_USE_VOUCHER = auto()
 
     id: int = field(
@@ -412,17 +414,13 @@ class Voucher:
     name: str
     state: State = field(repr=repr_field, converter=State.__getitem__)  # type: ignore[misc]
     type: Type = field(repr=repr_field, converter=Type.__getitem__)  # type: ignore[misc]
-    version: Version = field(repr=repr_field, converter=Version.__getitem__)  # type: ignore[misc]
-    amount: Price = field(repr=repr_field, converter=Price.from_json, alias="current_amount")  # type: ignore[misc]
-    original_amount: Price | None = field(default=None, repr=repr_field, converter=optional(Price.from_json))  # type: ignore[misc]
+    version: Version = field(repr=False, converter=Version.__getitem__)  # type: ignore[misc]
 
     @classmethod
     @debug
-    def from_json(cls, data: JSON) -> Self:
+    def from_json(cls, data: JSON) -> Voucher:  # type: ignore[return]
         if "store_filter_type" in data:
             assert (store_filter_type := data.pop("store_filter_type")) == "NONE", store_filter_type
-        if "items_left" in data:
-            assert not (items_left := data.pop("items_left")), items_left
 
         for key in "valid_from", "valid_to":
             del data[key]
@@ -430,4 +428,24 @@ class Voucher:
             if key in data:
                 del data[key]
 
-        return cls(**data)
+        match cls.Version[data["version"]]:
+            case cls.Version.COUNTRY_BASED_SINGLE_USE_VOUCHER:
+                return SingleUseVoucher(**data)
+            case cls.Version.CURRENCY_BASED_MULTI_USE_VOUCHER:
+                if "items_left" in data:
+                    assert not (items_left := data.pop("items_left")), items_left
+
+                return MultiUseVoucher(**data)
+
+
+@frozen(kw_only=True)
+class MultiUseVoucher(Voucher):
+    amount: Price = field(repr=repr_field, converter=Price.from_json, alias="current_amount")  # type: ignore[misc]
+    original_amount: Price | None = field(default=None, repr=repr_field, converter=optional(Price.from_json))  # type: ignore[misc]
+
+
+@frozen(kw_only=True)
+class SingleUseVoucher(Voucher):
+    max_item_price: Price | None = field(default=None, repr=repr_field, converter=optional(Price.from_json))  # type: ignore[misc]
+    items_left: int
+    num_items: int | None = field(default=None, alias="number_of_items")

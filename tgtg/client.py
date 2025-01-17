@@ -44,7 +44,7 @@ from .errors import (
     TgtgUnauthorizedError,
     TgtgValidationError,
 )
-from .models import Credentials, Item, Payment, Reservation, Voucher
+from .models import Credentials, Item, MultiUseVoucher, Payment, Reservation, Voucher
 from .utils import (
     format_tz_offset,
     httpx_remove_HTTPStatusError_info_suffix,
@@ -655,9 +655,13 @@ class TgtgClient(AsyncResource):
         data = await self._post(TgtgApi.ORDER_PAY, reservation_id, json={"authorizations": list(authorizations)})
         return list(map(Payment.from_json, data["payments"]))
 
-    async def pay(self, reservation: Reservation, voucher: Voucher | None = None) -> list[Payment]:
+    async def pay(self, reservation: Reservation, voucher: MultiUseVoucher | None = None) -> list[Payment]:
         if voucher is None:
-            vouchers = [v for v in await self.get_active_vouchers() if v.amount.code == reservation.total_price.code]
+            vouchers = [
+                v
+                for v in await self.get_active_vouchers()
+                if isinstance(v, MultiUseVoucher) and v.amount.code == reservation.total_price.code
+            ]
             if not vouchers:
                 raise TgtgPaymentError("No vouchers available")
             voucher = max(vouchers, key=lambda voucher: voucher.amount.minor_units)
@@ -704,6 +708,7 @@ class TgtgClient(AsyncResource):
             )
 
         updated_voucher = await self.get_voucher(voucher.id)
+        assert isinstance(updated_voucher, MultiUseVoucher)
         if (deducted_amount := voucher.amount - updated_voucher.amount).minor_units != 1:
             logger.warning("{} deducted from voucher {}", deducted_amount, voucher.id)
 
