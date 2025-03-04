@@ -156,7 +156,7 @@ class Bot:
                 await self.client.ntfy.publish(f"Ordered: {order['quantity']}x {item.name}", tag="shopping_cart")
                 return order
 
-    async def snipe(self, item_id: int) -> Reservation | None:
+    async def snipe(self, item_id: int) -> JSON | None:
         logger.info("Sniping item {}...", item_id)
         await self._del_scheduled_snipe(item_id, conflict_policy=ConflictPolicy.exception)
 
@@ -165,10 +165,12 @@ class Bot:
             if did_item_change := item.num_available or not item.is_check_again_later:
                 logger.info(f"Snipe attempt {attempt + 1}<normal>: {item.colorize()}</normal>")  # noqa: G004
 
-            if item.num_available and (reservation := await self.hold(item)):
+            if item.num_available and (order := await self.order(item)):
                 if attempt == self.SNIPE_MAX_ATTEMPTS - 1:
                     logger.warning("Snipe succeeded on final ({}th) attempt", self.SNIPE_MAX_ATTEMPTS)
-                return reservation
+                # TODO: Detect recently reserved/ordered items in case stores drop additional bags
+                await self._untrack_item(item.id)
+                return order
 
             if did_item_change:
                 logger.warning(f"Unexpected<normal>: {item.colorize()}</normal>")  # noqa: G004
@@ -241,8 +243,9 @@ class Bot:
                 item = await self.client.get_item(fave.id)
                 if item.num_available != fave.num_available:
                     logger.warning(f"Updated<normal>: {item.to_favorite().colorize_diff(fave)}</normal>")  # noqa: G004
-                if item.num_available:
-                    await self.hold(item)
+                if item.num_available and await self.order(item):
+                    # TODO: Detect recently reserved/ordered items in case stores drop additional bags
+                    await self._untrack_item(item.id)
 
             if not fave.is_check_again_later and self.scheduled_snipes.get(fave.id, True) is None:
                 await self._del_scheduled_snipe(fave.id, conflict_policy=ConflictPolicy.do_nothing)
