@@ -29,7 +29,7 @@ from whenever import TimeDelta, seconds
 
 from . import items
 from .client import TgtgClient
-from .errors import TgtgApiError
+from .errors import TgtgApiError, TgtgPaymentError
 from .models import Credentials, Item, Reservation
 
 if TYPE_CHECKING:
@@ -87,15 +87,27 @@ class Bot:
     async def order(self, item: Item, quantity: int) -> JSON | None:
         try:
             reservation = await self.client.reserve(item, quantity)
-            logger.debug(reservation)
-            await self.client.pay(reservation)
-            order: JSON = (await self.client.get_order(reservation.id))["order"]
         except TgtgApiError as e:
             logger.error("Item {}<normal>: {!r}</normal>", item.id, e)
             return None
         else:
-            logger.success(order)
-            return order
+            logger.debug(reservation)
+
+            try:
+                await self.client.pay(reservation)
+            except TgtgPaymentError as e:
+                logger.warning("Item {}<normal>: {!r}</normal>", item.id, e)
+                # TODO: See if I can hold without aborting
+                await self.client.abort_reservation(reservation)
+                await self.hold(item, quantity)
+                return None
+            except TgtgApiError as e:
+                logger.error("Item {}<normal>: {!r}</normal>", item.id, e)
+                return None
+            else:
+                order: JSON = (await self.client.get_order(reservation.id))["order"]
+                logger.success(order)
+                return order
 
     @logger.catch
     async def check_favorites(self) -> None:
