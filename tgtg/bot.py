@@ -25,12 +25,13 @@ from tenacity import (
     stop_after_attempt,
     wait_fixed,
 )
-from whenever import TimeDelta, seconds
+from whenever import Instant, TimeDelta, seconds
 
 from . import items
 from .client import TgtgClient
 from .errors import TgtgApiError, TgtgPaymentError
 from .models import Credentials, Item, Reservation
+from .utils import format_time, relative_date
 
 if TYPE_CHECKING:
     from apscheduler.abc import Trigger
@@ -53,6 +54,7 @@ CREDENTIALS_PATH = (Path.cwd() / "credentials.json").resolve()
 @frozen(eq=False)
 class Bot:
     tracked_items: dict[int, Item | None]
+    scheduled_snipes: dict[int, Instant | None] = field(init=False, factory=dict)
 
     client: TgtgClient = field(
         init=False,
@@ -61,6 +63,7 @@ class Bot:
 
     CATCH_RESERVATION_DELAY: ClassVar[TimeDelta] = seconds(1)
     CHECK_FAVORITES_TRIGGER: ClassVar[Trigger] = IntervalTrigger(seconds=2)
+    SNIPE_MAX_ATTEMPTS: ClassVar[int] = 6
 
     @logger.catch
     @retry_policy
@@ -109,6 +112,33 @@ class Bot:
                 logger.success(order)
                 return order
 
+    async def snipe(self, item_id: int) -> Reservation | None:
+        logger.info("Sniping item {}...", item_id)
+        del self.scheduled_snipes[item_id]
+
+        for attempt in range(self.SNIPE_MAX_ATTEMPTS):
+            item = await self.client.get_item(item_id)
+            if did_item_change := item.num_available or item.in_sales_window or item.tag != Item.Tag.CHECK_AGAIN_LATER:
+                logger.info(f"Snipe attempt {attempt + 1}<normal>: {item.colorize()}</normal>")  # noqa: G004
+
+            if (
+                item.num_available
+                and item.in_sales_window
+                and (reservation := await self.hold(item, item.num_available))
+            ):
+                if attempt == self.SNIPE_MAX_ATTEMPTS - 1:
+                    logger.warning("Snipe succeeded on final ({}th) attempt", self.SNIPE_MAX_ATTEMPTS)
+                return reservation
+
+            if did_item_change:
+                logger.warning(f"Unexpected<normal>: {item.colorize()}</normal>")  # noqa: G004
+                break
+        else:
+            logger.warning(
+                "Item {}<normal>: Unchanged after {} snipe attempts</normal>", item_id, self.SNIPE_MAX_ATTEMPTS
+            )
+        return None
+
     @logger.catch
     async def check_favorites(self) -> None:
         async def process_item(item: Item) -> None:
@@ -119,10 +149,6 @@ class Bot:
 
                 logger_func = logger.debug if item.id in items.ignored else logger.info
                 if old_item is not None:
-                    if old_item.tag == Item.Tag.CHECK_AGAIN_LATER != item.tag or not (
-                        old_item.in_sales_window or item.in_sales_window or old_item.tag or item.tag
-                    ):
-                        logger_func = logger.warning
                     logger_func(f"Changed<normal>: {item.colorize_diff(old_item)}</normal>")
                 elif item.is_interesting:
                     logger_func(f"<normal>{item.colorize()}</normal>")
@@ -137,6 +163,29 @@ class Bot:
 
             if item.num_available and item.in_sales_window:
                 await self.hold(item, item.num_available)
+
+            if item.tag != Item.Tag.CHECK_AGAIN_LATER and self.scheduled_snipes.get(item.id, True) is None:
+                # TODO: If an item has no upcoming drop and the CHECK_AGAIN_LATER tag fluctuates, the bot repeatedly calls get_item()
+                del self.scheduled_snipes[item.id]
+            elif item.tag == Item.Tag.CHECK_AGAIN_LATER and item.id not in self.scheduled_snipes:
+                if (item := await self.client.get_item(item.id)).next_sales_window:
+                    await self.client._scheduler.add_schedule(
+                        partial(self.snipe, item.id),
+                        DateTrigger(item.next_sales_window.py_datetime()),
+                        id=f"snipe-item-{item.id}",
+                        conflict_policy=ConflictPolicy.exception,
+                    )
+                    local_ts = item.next_sales_window.to_system_tz()
+                    logger.info(
+                        "Item {}<normal>: Snipe scheduled for {} at {}</normal>",
+                        item.id,
+                        relative_date(local_ts.date()),
+                        format_time(local_ts.time()),
+                    )
+                else:
+                    logger.debug("Item {}<normal>: No upcoming drop</normal>", item.id)
+
+                self.scheduled_snipes[item.id] = item.next_sales_window
 
         async with create_task_group() as tg:
             try:
