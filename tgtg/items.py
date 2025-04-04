@@ -49,6 +49,8 @@ bad_timing: set[int] = {
 disabled: set[int] = {
     # Bake Code (Midland Ave.) - Scarborough
     646160,  # Baked Goods
+    # Chocolat de Kat
+    537465,
     # Ensanemada
     633196,  # Surprise Bag
 }
