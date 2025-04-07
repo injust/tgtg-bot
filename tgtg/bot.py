@@ -164,6 +164,28 @@ class Bot:
 
                 logger_func = logger.debug if item.id in items.ignored else logger.info
                 if old_item is not None:
+                    if (
+                        item.id in self.held_items
+                        and (
+                            old_item.tag == Item.Tag.SOLD_OUT
+                            or old_item.num_available == self.held_items[item.id].quantity
+                        )
+                        and old_item.in_sales_window is True is item.in_sales_window
+                        and old_item.tag
+                        in {
+                            Item.Tag.CHECK_AGAIN_LATER,
+                            Item.Tag.ENDING_SOON,
+                            Item.Tag.SELLING_FAST,
+                            Item.Tag.SOLD_OUT,
+                            Item.Tag.X_ITEMS_LEFT,
+                        }
+                        and item.tag == Item.Tag.SOLD_OUT
+                        # Rounding mode is a best guess unless I can test a `Reservation` with exactly half-second `reserved_at` timestamp
+                        and item.sold_out_at == self.held_items[item.id].reserved_at.round(mode="half_ceil")
+                    ):
+                        # Lower logging severity when item updates after reserving
+                        logger_func = logger.debug
+
                     logger_func(f"Changed<normal>: {item.colorize_diff(old_item)}</normal>")
                 elif item.is_interesting:
                     logger_func(f"<normal>{item.colorize()}</normal>")
