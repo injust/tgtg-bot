@@ -25,7 +25,7 @@ from tenacity import (
     stop_after_attempt,
     wait_fixed,
 )
-from whenever import Instant, TimeDelta, seconds
+from whenever import Instant, TimeDelta, minutes, seconds
 
 from . import items
 from .client import TgtgClient
@@ -62,9 +62,18 @@ class Bot:
         factory=lambda: TgtgClient.from_credentials(Credentials.load(CREDENTIALS_PATH), MozillaCookieJar(COOKIES_PATH)),
     )
 
+    API_FLAPPING_COOLDOWN: ClassVar[TimeDelta] = minutes(2)
     CATCH_RESERVATION_DELAY: ClassVar[TimeDelta] = seconds(1)
     CHECK_FAVORITES_TRIGGER: ClassVar[Trigger] = IntervalTrigger(seconds=2)
     SNIPE_MAX_ATTEMPTS: ClassVar[int] = 6
+
+    async def _del_scheduled_snipe(self, item_id: int, *, conflict_policy: ConflictPolicy) -> str:
+        return await self.client._scheduler.add_schedule(
+            partial(self.scheduled_snipes.pop, item_id),
+            DateTrigger((Instant.now() + self.API_FLAPPING_COOLDOWN).py_datetime()),
+            id=f"del-scheduled-snipe-{item_id}",
+            conflict_policy=conflict_policy,
+        )
 
     @logger.catch
     @retry_policy
@@ -118,7 +127,7 @@ class Bot:
 
     async def snipe(self, item_id: int) -> Reservation | None:
         logger.info("Sniping item {}...", item_id)
-        del self.scheduled_snipes[item_id]
+        await self._del_scheduled_snipe(item_id, conflict_policy=ConflictPolicy.exception)
 
         for attempt in range(self.SNIPE_MAX_ATTEMPTS):
             item = await self.client.get_item(item_id)
@@ -213,8 +222,7 @@ class Bot:
                 await self.hold(item, item.num_available)
 
             if item.tag != Item.Tag.CHECK_AGAIN_LATER and self.scheduled_snipes.get(item.id, True) is None:
-                # TODO: If an item has no upcoming drop and the CHECK_AGAIN_LATER tag fluctuates, the bot repeatedly calls get_item()
-                del self.scheduled_snipes[item.id]
+                await self._del_scheduled_snipe(item.id, conflict_policy=ConflictPolicy.do_nothing)
             elif item.tag == Item.Tag.CHECK_AGAIN_LATER and item.id not in self.scheduled_snipes:
                 if (item := await self.client.get_item(item.id)).next_sales_window:
                     await self.client._scheduler.add_schedule(
