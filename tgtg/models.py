@@ -158,7 +158,6 @@ class Item:
     name: str
     tag: Tag = field(default=Tag.NOTHING_TO_SAVE_TODAY, repr=repr_field)
     num_available: int = field(default=0, alias="items_available")
-    in_sales_window: bool = False
     pickup_interval: Interval | None = field(default=None, repr=repr_field, converter=optional(Interval.from_json))  # type: ignore[misc]
     sold_out_at: Instant | None = field(
         default=None,
@@ -215,6 +214,7 @@ class Item:
             "distance",
             "favorite",
             "subscribed_to_notification",
+            "in_sales_window",
             "new_item",
             "item_type",
         ):

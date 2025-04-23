@@ -136,14 +136,10 @@ class Bot:
 
         for attempt in range(self.SNIPE_MAX_ATTEMPTS):
             item = await self.client.get_item(item_id)
-            if did_item_change := item.num_available or item.in_sales_window or item.tag != Item.Tag.CHECK_AGAIN_LATER:
+            if did_item_change := item.num_available or item.tag != Item.Tag.CHECK_AGAIN_LATER:
                 logger.info(f"Snipe attempt {attempt + 1}<normal>: {item.colorize()}</normal>")  # noqa: G004
 
-            if (
-                item.num_available
-                and item.in_sales_window
-                and (reservation := await self.hold(item, item.num_available))
-            ):
+            if item.num_available and (reservation := await self.hold(item, item.num_available)):
                 if attempt == self.SNIPE_MAX_ATTEMPTS - 1:
                     logger.warning("Snipe succeeded on final ({}th) attempt", self.SNIPE_MAX_ATTEMPTS)
                 return reservation
@@ -167,7 +163,6 @@ class Bot:
                     old_item is not None
                     and item.id in self.held_items
                     and item.num_available == self.held_items[item.id].quantity
-                    and old_item.in_sales_window is True is item.in_sales_window
                     and old_item.tag == Item.Tag.SOLD_OUT
                     and item.tag in {Item.Tag.ENDING_SOON, Item.Tag.SELLING_FAST, Item.Tag.X_ITEMS_LEFT}
                 ):
@@ -176,7 +171,6 @@ class Bot:
                 if (
                     old_item is not None
                     and item.id in self.held_items
-                    and old_item.in_sales_window is True is item.in_sales_window
                     and old_item.tag == Item.Tag.SOLD_OUT == item.tag
                     and item.sold_out_at is not None
                     # Rounding mode is a best guess unless I can test a `Reservation` with exactly half-second `reserved_at` timestamp
@@ -195,7 +189,6 @@ class Bot:
                             old_item.tag == Item.Tag.SOLD_OUT
                             or old_item.num_available == self.held_items[item.id].quantity
                         )
-                        and old_item.in_sales_window is True is item.in_sales_window
                         and old_item.tag
                         in {
                             Item.Tag.CHECK_AGAIN_LATER,
@@ -223,7 +216,7 @@ class Bot:
                 )
                 self.tracked_items[item.id] = item
 
-            if item.num_available and item.in_sales_window:
+            if item.num_available:
                 await self.hold(item, item.num_available)
 
             if item.tag != Item.Tag.CHECK_AGAIN_LATER and self.scheduled_snipes.get(item.id, True) is None:
