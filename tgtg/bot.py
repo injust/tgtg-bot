@@ -77,7 +77,7 @@ class Bot:
 
     @logger.catch
     @retry_policy
-    async def hold(self, item: Item, quantity: int) -> Reservation | None:
+    async def hold(self, item: Item, quantity: int, *, is_catch: bool = False) -> Reservation | None:
         try:
             reservation = await self.client.reserve(item, quantity)
         except TgtgApiError as e:
@@ -87,10 +87,14 @@ class Bot:
             return None
         else:
             logger.success(f"<normal>{reservation.colorize()}</normal>")
+            if not is_catch:
+                await self.client.ntfy.publish(
+                    f"Held: {reservation.quantity}x {item.name}", tag="hourglass_flowing_sand"
+                )
             self.held_items[item.id] = reservation
 
             await self.client._scheduler.add_schedule(
-                partial(self.hold, item, reservation.quantity),
+                partial(self.hold, item, reservation.quantity, is_catch=True),
                 DateTrigger((reservation.expires_at + self.CATCH_RESERVATION_DELAY).py_datetime()),
                 id=f"catch-reservation-{reservation.id}",
                 conflict_policy=ConflictPolicy.exception,
@@ -123,6 +127,7 @@ class Bot:
             else:
                 order: JSON = (await self.client.get_order(reservation.id))["order"]
                 logger.success(order)
+                await self.client.ntfy.publish(f"Ordered: {order['quantity']}x {item.name}", tag="shopping_cart")
                 return order
 
     async def snipe(self, item_id: int) -> Reservation | None:
