@@ -7,11 +7,18 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import humanize
 import orjson as jsonlib
+from httpx._config import DEFAULT_LIMITS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from whenever import Date, Time
+
+HTTPX_LIMITS = httpx.Limits(
+    max_connections=DEFAULT_LIMITS.max_connections,
+    max_keepalive_connections=DEFAULT_LIMITS.max_keepalive_connections,
+    keepalive_expiry=60,
+)
 
 
 def format_time(time: Time) -> str:

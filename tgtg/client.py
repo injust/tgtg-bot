@@ -20,7 +20,6 @@ from apscheduler import AsyncScheduler
 from attrs import Factory, asdict, define, field
 from attrs.converters import default_if_none
 from babel.core import default_locale
-from httpx._config import DEFAULT_LIMITS
 from loguru import logger
 from packaging.version import Version
 from tenacity import retry, retry_if_exception_type, stop_after_attempt
@@ -43,7 +42,13 @@ from .errors import (
     TgtgUnauthorizedError,
 )
 from .models import Credentials, Item, MultiUseVoucher, Payment, Reservation, Voucher
-from .utils import httpx_remove_HTTPStatusError_info_suffix, httpx_response_json_or_text, httpx_response_jsonlib
+from .ntfy import NtfyClient, Priority
+from .utils import (
+    HTTPX_LIMITS,
+    httpx_remove_HTTPStatusError_info_suffix,
+    httpx_response_json_or_text,
+    httpx_response_jsonlib,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
@@ -53,12 +58,6 @@ if TYPE_CHECKING:
 logger = logger.opt(colors=True)
 httpx.Response.json = httpx_response_jsonlib  # type: ignore[method-assign]
 httpx.Response.raise_for_status = httpx_remove_HTTPStatusError_info_suffix(httpx.Response.raise_for_status)  # type: ignore[assignment, method-assign]  # pyright: ignore[reportAttributeAccessIssue]
-
-HTTPX_LIMITS = httpx.Limits(
-    max_connections=DEFAULT_LIMITS.max_connections,
-    max_keepalive_connections=DEFAULT_LIMITS.max_keepalive_connections,
-    keepalive_expiry=60,
-)
 
 
 @define(eq=False)
@@ -173,6 +172,7 @@ class TgtgClient(AsyncResource):
     device_id: UUID = field(init=False, factory=uuid4)
 
     datadome: DataDomeSdk = field(init=False, default=Factory(lambda self: DataDomeSdk(self.cookies), takes_self=True))
+    ntfy: NtfyClient = field(init=False, factory=lambda: NtfyClient("tgtg-injust"))
 
     _exit_stack: AsyncExitStack = field(init=False)
     _httpx: httpx.AsyncClient = field(
@@ -234,6 +234,7 @@ class TgtgClient(AsyncResource):
         async with AsyncExitStack() as exit_stack:
             await exit_stack.enter_async_context(self._httpx)
             await exit_stack.enter_async_context(self.datadome)
+            await exit_stack.enter_async_context(self.ntfy)
 
             if not hasattr(self, "credentials"):
                 self.credentials = await self.login(self.email)
@@ -303,6 +304,7 @@ class TgtgClient(AsyncResource):
             case HTTPStatus.FORBIDDEN, _ if "X-DD-B" in r.headers:
                 # TODO: Handle DataDome CAPTCHA
                 logger.opt(colors=False).debug(r.text)
+                await self.ntfy.publish("DataDome CAPTCHA", priority=Priority.HIGH, tag="rotating_light")
                 await self._scheduler.stop()
                 raise TgtgCaptchaError
             case HTTPStatus.FORBIDDEN, _ if r.json() == {"errors": [{"code": "UNAUTHORIZED"}]}:
@@ -700,6 +702,7 @@ class TgtgClient(AsyncResource):
         assert isinstance(updated_voucher, MultiUseVoucher)
         if (deducted_amount := voucher.amount - updated_voucher.amount).minor_units != 1:
             logger.warning("{} deducted from voucher {}", deducted_amount, voucher.id)
+            await self.ntfy.publish(f"{deducted_amount} deducted from voucher", priority=Priority.HIGH, tag="tickets")
 
         assert all(payment.state == Payment.State.CAPTURED for payment in payments), payments
         return payments
