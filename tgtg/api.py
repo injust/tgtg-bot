@@ -40,6 +40,7 @@ class TgtgApi(StrEnum):
     ORDERS_ACTIVE = "order/v8/active"
 
     ORDER_STATUS = "order/v8/{}"
+    ORDER_STATUS_SHORT = "order/v8/{}/status"
     ORDER_ABORT = "order/v8/{}/abort"
     ORDER_CANCEL = "order/v8/{}/cancel"
     ORDER_CREATE = "order/v8/create/{}"

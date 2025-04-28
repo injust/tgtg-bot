@@ -609,6 +609,9 @@ class TgtgClient(AsyncResource):
     async def get_order(self, order_id: str) -> JSON:
         return await self._post(TgtgApi.ORDER_STATUS, order_id)
 
+    async def _get_order_short(self, order_id: str) -> JSON:
+        return await self._post(TgtgApi.ORDER_STATUS_SHORT, order_id)
+
     async def cancel_order(self, order_id: str) -> JSON:
         data = await self._post(TgtgApi.ORDER_CANCEL, order_id, json={"cancel_reason_id": 1})
 
