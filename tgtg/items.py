@@ -58,6 +58,11 @@ disabled: set[int] = {
 far: set[int] = {
     # A Tavola
     82874509545092577,  # Surprise Bag
+    # Amber Kitchen and Coffee
+    123793163840686273,  # Baked goods and Sandwiches Surprise Bag
+    # Amelia’s Market  # noqa: RUF003
+    66353292298537505,  # $15 Surprise Bag : Grab and go food
+    86148719765039329,  # Baked goods
     # Aunt Beth Bakes
     940373,  # Whiskey Cookie Surprise Bag
     # Bingz Crispy Burger 西少爷肉夹馍 - CF Fairview Mall
