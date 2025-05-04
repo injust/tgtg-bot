@@ -55,6 +55,24 @@ def repr_field(obj: object) -> str:
 
 
 @frozen(kw_only=True)
+class ColorizeMixin:
+    @property
+    def _non_default_fields(self) -> tuple[Attribute[object], ...]:
+        return tuple(f for f in fields(type(self)) if getattr(self, f.name) != f.default)
+
+    def colorize(self) -> str:
+        field_repr: list[str] = []
+
+        for f in self._non_default_fields:
+            if f.repr:
+                value = getattr(self, f.name)
+                repr_func = repr if f.repr is True else f.repr
+                field_repr.append(f"{f.name}=<normal>{repr_func(value)}</normal>")
+
+        return f"{type(self).__name__}(<dim>{', '.join(field_repr)}</dim>)"
+
+
+@frozen(kw_only=True)
 class Credentials(httpx.Auth):
     access_token: str
     refresh_token: str
@@ -115,7 +133,7 @@ class Interval:
 
 
 @frozen(kw_only=True)
-class Item:
+class Item(ColorizeMixin):
     class Packaging(Enum):
         BAG_ALLOWED = auto()
         CANT_BRING_ANYTHING = auto()
@@ -232,25 +250,10 @@ class Item:
         )
 
     @property
-    def _non_default_fields(self) -> tuple[Attribute[object], ...]:
-        return tuple(f for f in fields(type(self)) if getattr(self, f.name) != f.default)
-
-    @property
     def is_interesting(self) -> bool:
         fields_ = fields(type(self))
         uninteresting_fields = {fields_.id, fields_.name}
         return not set(self._non_default_fields) <= uninteresting_fields
-
-    def colorize(self) -> str:
-        field_repr: list[str] = []
-
-        for f in self._non_default_fields:
-            if f.repr:
-                value = getattr(self, f.name)
-                repr_func = repr if f.repr is True else f.repr
-                field_repr.append(f"{f.name}=<normal>{repr_func(value)}</normal>")
-
-        return f"{type(self).__name__}(<dim>{', '.join(field_repr)}</dim>)"
 
     def colorize_diff(self, old_item: Self) -> str:
         field_repr: list[str] = []
@@ -341,7 +344,7 @@ class Price:
 
 
 @frozen(kw_only=True)
-class Reservation:
+class Reservation(ColorizeMixin):
     class State(Enum):
         RESERVED = auto()
 
@@ -373,23 +376,8 @@ class Reservation:
         )
 
     @property
-    def _non_default_fields(self) -> tuple[Attribute[object], ...]:
-        return tuple(f for f in fields(type(self)) if getattr(self, f.name) != f.default)
-
-    @property
     def expires_at(self) -> Instant:
         return self.reserved_at + self.TTL
-
-    def colorize(self) -> str:
-        field_repr: list[str] = []
-
-        for f in self._non_default_fields:
-            if f.repr:
-                value = getattr(self, f.name)
-                repr_func = repr if f.repr is True else f.repr
-                field_repr.append(f"{f.name}=<normal>{repr_func(value)}</normal>")
-
-        return f"{type(self).__name__}(<dim>{', '.join(field_repr)}</dim>)"
 
 
 @frozen(kw_only=True)
