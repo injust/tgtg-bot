@@ -191,7 +191,7 @@ class Item(ColorizeMixin):
         ],
     )
     purchase_limit: int | None = field(default=None, alias="user_purchase_limit")
-    next_sales_window: Instant | None = field(
+    next_drop: Instant | None = field(
         default=None,
         repr=repr_field,
         converter=optional(Instant.parse_common_iso),  # type: ignore[misc]

@@ -222,14 +222,14 @@ class Bot:
             if item.tag != Item.Tag.CHECK_AGAIN_LATER and self.scheduled_snipes.get(item.id, True) is None:
                 await self._del_scheduled_snipe(item.id, conflict_policy=ConflictPolicy.do_nothing)
             elif item.tag == Item.Tag.CHECK_AGAIN_LATER and item.id not in self.scheduled_snipes:
-                if (item := await self.client.get_item(item.id)).next_sales_window:
+                if (item := await self.client.get_item(item.id)).next_drop:
                     await self.client._scheduler.add_schedule(
                         partial(self.snipe, item.id),
-                        DateTrigger(item.next_sales_window.py_datetime()),
+                        DateTrigger(item.next_drop.py_datetime()),
                         id=f"snipe-item-{item.id}",
                         conflict_policy=ConflictPolicy.exception,
                     )
-                    local_ts = item.next_sales_window.to_system_tz()
+                    local_ts = item.next_drop.to_system_tz()
                     logger.info(
                         "Item {}<normal>: Snipe scheduled for {} at {}</normal>",
                         item.id,
@@ -239,7 +239,7 @@ class Bot:
                 else:
                     logger.debug("Item {}<normal>: No upcoming drop</normal>", item.id)
 
-                self.scheduled_snipes[item.id] = item.next_sales_window
+                self.scheduled_snipes[item.id] = item.next_drop
 
         async with create_task_group() as tg:
             try:
