@@ -133,7 +133,7 @@ class Interval:
 
 
 @frozen(kw_only=True)
-class Item(ColorizeMixin):
+class Favorite(ColorizeMixin):
     class Packaging(Enum):
         BAG_ALLOWED = auto()
         CANT_BRING_ANYTHING = auto()
@@ -156,7 +156,7 @@ class Item(ColorizeMixin):
 
         @classmethod
         @debug
-        def from_json(cls, data: JSON) -> Item.Tag | None:
+        def from_json(cls, data: JSON) -> Favorite.Tag | None:
             match data["id"]:
                 case "NEW":
                     return None
@@ -187,21 +187,8 @@ class Item(ColorizeMixin):
         repr=repr_field,
         converter=[  # type: ignore[misc]
             Packaging.__getitem__,
-            lambda packaging: None if cast("Item.Packaging", packaging).is_provided else packaging,
+            lambda packaging: None if cast("Favorite.Packaging", packaging).is_provided else packaging,
         ],
-    )
-    purchase_limit: int | None = field(default=None, alias="user_purchase_limit")
-    next_drop: Instant | None = field(
-        default=None,
-        repr=repr_field,
-        converter=optional(Instant.parse_common_iso),  # type: ignore[misc]
-        alias="next_sales_window_purchase_start",
-    )
-    blocked_until: Instant | None = field(
-        default=None,
-        repr=repr_field,
-        converter=optional(Instant.parse_common_iso),  # type: ignore[misc]
-        alias="reservation_blocked_until",
     )
 
     @classmethod
@@ -216,7 +203,7 @@ class Item(ColorizeMixin):
 
             return " ".join(name)
 
-        def convert_tags(data: Iterable[JSON]) -> Item.Tag:
+        def convert_tags(data: Iterable[JSON]) -> Favorite.Tag:
             tags = list(filter(None, map(cls.Tag.from_json, data)))
             assert len(tags) == 1, tags
             return tags[0]
@@ -273,6 +260,23 @@ class Item(ColorizeMixin):
                 )
 
         return f"{type(self).__name__}(<dim>{', '.join(field_repr)}</dim>)"
+
+
+@frozen(kw_only=True)
+class Item(Favorite):
+    purchase_limit: int | None = field(default=None, alias="user_purchase_limit")
+    next_drop: Instant | None = field(
+        default=None,
+        repr=repr_field,
+        converter=optional(Instant.parse_common_iso),  # type: ignore[misc]
+        alias="next_sales_window_purchase_start",
+    )
+    blocked_until: Instant | None = field(
+        default=None,
+        repr=repr_field,
+        converter=optional(Instant.parse_common_iso),  # type: ignore[misc]
+        alias="reservation_blocked_until",
+    )
 
 
 @frozen(kw_only=True)
