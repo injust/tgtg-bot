@@ -30,7 +30,7 @@ from whenever import Instant, TimeDelta, minutes, seconds
 
 from . import items
 from .client import TgtgClient
-from .errors import TgtgApiError, TgtgPaymentError
+from .errors import TgtgApiError, TgtgLimitExceededError, TgtgPaymentError
 from .models import Credentials, Favorite, Item, Reservation
 from .utils import format_time, relative_date
 
@@ -84,6 +84,11 @@ class Bot:
             conflict_policy=ConflictPolicy.exception,
         )
 
+    async def _untrack_item(self, item_id: int) -> None:
+        logger.warning("Untracking item {}", item_id)
+        await self.client.unfavorite(item_id)
+        del self.tracked_items[item_id]
+
     @logger.catch
     @retry_policy
     async def hold(self, item: Item) -> Reservation | None:
@@ -91,6 +96,8 @@ class Bot:
             reservation = await self.client.reserve(item, item.max_quantity)
         except TgtgApiError as e:
             logger.error("Item {}<normal>: {!r}</normal>", item.id, e)
+            if isinstance(e, TgtgLimitExceededError):
+                await self._untrack_item(item.id)
             return None
         else:
             logger.success(f"<normal>{reservation.colorize()}</normal>")
@@ -106,6 +113,8 @@ class Bot:
             reservation = await self.client.reserve(held.item_id, held.quantity)
         except TgtgApiError as e:
             logger.error("Item {}<normal>: {!r}</normal>", held.item_id, e)
+            if isinstance(e, TgtgLimitExceededError):
+                await self._untrack_item(held.item_id)
             return None
         else:
             logger.success(f"<normal>{reservation.colorize()}</normal>")
@@ -122,6 +131,8 @@ class Bot:
             reservation = await self.client.reserve(item, item.max_quantity)
         except TgtgApiError as e:
             logger.error("Item {}<normal>: {!r}</normal>", item.id, e)
+            if isinstance(e, TgtgLimitExceededError):
+                await self._untrack_item(item.id)
             return None
         else:
             logger.debug(reservation)
