@@ -278,6 +278,10 @@ class Item(Favorite):
         alias="reservation_blocked_until",
     )
 
+    @property
+    def max_quantity(self) -> int:
+        return min(self.num_available, self.purchase_limit or self.num_available)
+
 
 @frozen(kw_only=True)
 class Payment:

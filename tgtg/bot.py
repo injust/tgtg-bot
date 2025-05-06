@@ -75,38 +75,50 @@ class Bot:
             conflict_policy=conflict_policy,
         )
 
+    async def _schedule_catch(self, reservation: Reservation) -> str:
+        return await self.client._scheduler.add_schedule(
+            partial(self.catch, reservation),
+            DateTrigger((reservation.expires_at + self.CATCH_RESERVATION_DELAY).py_datetime()),
+            id=f"catch-reservation-{reservation.id}",
+            conflict_policy=ConflictPolicy.exception,
+        )
+
     @logger.catch
     @retry_policy
-    async def hold(self, item: Item, quantity: int, *, is_catch: bool = False) -> Reservation | None:
+    async def hold(self, item: Item) -> Reservation | None:
         try:
-            reservation = await self.client.reserve(item, quantity)
+            reservation = await self.client.reserve(item, item.max_quantity)
         except TgtgApiError as e:
             logger.error("Item {}<normal>: {!r}</normal>", item.id, e)
-            if is_catch and self.held_items[item.id].quantity == quantity:
-                del self.held_items[item.id]
             return None
         else:
             logger.success(f"<normal>{reservation.colorize()}</normal>")
-            if not is_catch:
-                await self.client.ntfy.publish(
-                    f"Held: {reservation.quantity}x {item.name}", tag="hourglass_flowing_sand"
-                )
+            await self.client.ntfy.publish(f"Held: {reservation.quantity}x {item.name}", tag="hourglass_flowing_sand")
             self.held_items[item.id] = reservation
-
-            await self.client._scheduler.add_schedule(
-                partial(self.hold, item, reservation.quantity, is_catch=True),
-                DateTrigger((reservation.expires_at + self.CATCH_RESERVATION_DELAY).py_datetime()),
-                id=f"catch-reservation-{reservation.id}",
-                conflict_policy=ConflictPolicy.exception,
-            )
-
+            await self._schedule_catch(reservation)
             return reservation
 
     @logger.catch
     @retry_policy
-    async def order(self, item: Item, quantity: int) -> JSON | None:
+    async def catch(self, held: Reservation) -> Reservation | None:
         try:
-            reservation = await self.client.reserve(item, quantity)
+            reservation = await self.client.reserve(held.item_id, held.quantity)
+        except TgtgApiError as e:
+            logger.error("Item {}<normal>: {!r}</normal>", held.item_id, e)
+            if self.held_items[held.item_id].quantity == held.quantity:
+                del self.held_items[held.item_id]
+            return None
+        else:
+            logger.success(f"<normal>{reservation.colorize()}</normal>")
+            self.held_items[held.item_id] = reservation
+            await self._schedule_catch(reservation)
+            return reservation
+
+    @logger.catch
+    @retry_policy
+    async def order(self, item: Item) -> JSON | None:
+        try:
+            reservation = await self.client.reserve(item, item.max_quantity)
         except TgtgApiError as e:
             logger.error("Item {}<normal>: {!r}</normal>", item.id, e)
             return None
@@ -119,7 +131,7 @@ class Bot:
                 logger.warning("Item {}<normal>: {!r}</normal>", item.id, e)
                 # TODO: See if I can hold without aborting
                 await self.client.abort_reservation(reservation)
-                await self.hold(item, quantity)
+                await self.hold(item)
                 return None
             except TgtgApiError as e:
                 logger.error("Item {}<normal>: {!r}</normal>", item.id, e)
@@ -139,7 +151,7 @@ class Bot:
             if did_item_change := item.num_available or item.tag != Item.Tag.CHECK_AGAIN_LATER:
                 logger.info(f"Snipe attempt {attempt + 1}<normal>: {item.colorize()}</normal>")  # noqa: G004
 
-            if item.num_available and (reservation := await self.hold(item, item.num_available)):
+            if item.num_available and (reservation := await self.hold(item)):
                 if attempt == self.SNIPE_MAX_ATTEMPTS - 1:
                     logger.warning("Snipe succeeded on final ({}th) attempt", self.SNIPE_MAX_ATTEMPTS)
                 return reservation
@@ -222,7 +234,7 @@ class Bot:
                 if item.num_available != fave.num_available:
                     logger.warning(f"Updated<normal>: {item.colorize()}</normal>")  # noqa: G004
                 if item.num_available:
-                    await self.hold(item, item.num_available)
+                    await self.hold(item)
 
             if fave.tag != Favorite.Tag.CHECK_AGAIN_LATER and self.scheduled_snipes.get(fave.id, True) is None:
                 await self._del_scheduled_snipe(fave.id, conflict_policy=ConflictPolicy.do_nothing)

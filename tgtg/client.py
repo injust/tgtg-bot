@@ -537,7 +537,7 @@ class TgtgClient(AsyncResource):
                     item.num_available,
                     quantity,
                 )
-                return await self.reserve(item, min(item.num_available, item.purchase_limit or item.num_available))
+                return await self.reserve(item, item.max_quantity)
             case "OVER_USER_WINDOW_LIMIT":
                 item = await self.get_item(item_id)
                 logger.error(
@@ -548,7 +548,7 @@ class TgtgClient(AsyncResource):
                 assert item.purchase_limit is not None
                 if quantity <= item.purchase_limit:
                     raise TgtgLimitExceededError
-                return await self.reserve(item, item.purchase_limit)
+                return await self.reserve(item, item.max_quantity)
             case "SUCCESS":
                 return Reservation.from_json(data["order"])
             case _:
