@@ -77,7 +77,7 @@ class Bot:
 
     @logger.catch
     @retry_policy
-    async def hold(self, item: Favorite, quantity: int, *, is_catch: bool = False) -> Reservation | None:
+    async def hold(self, item: Item, quantity: int, *, is_catch: bool = False) -> Reservation | None:
         try:
             reservation = await self.client.reserve(item, quantity)
         except TgtgApiError as e:
@@ -104,7 +104,7 @@ class Bot:
 
     @logger.catch
     @retry_policy
-    async def order(self, item: Favorite, quantity: int) -> JSON | None:
+    async def order(self, item: Item, quantity: int) -> JSON | None:
         try:
             reservation = await self.client.reserve(item, quantity)
         except TgtgApiError as e:
@@ -216,13 +216,20 @@ class Bot:
                 )
                 self.tracked_items[fave.id] = fave
 
+            item: Item | None = None
             if fave.num_available:
-                await self.hold(fave, fave.num_available)
+                item = await self.client.get_item(fave.id)
+                if item.num_available != fave.num_available:
+                    logger.warning(f"Updated<normal>: {item.colorize()}</normal>")  # noqa: G004
+                if item.num_available:
+                    await self.hold(item, item.num_available)
 
             if fave.tag != Favorite.Tag.CHECK_AGAIN_LATER and self.scheduled_snipes.get(fave.id, True) is None:
                 await self._del_scheduled_snipe(fave.id, conflict_policy=ConflictPolicy.do_nothing)
             elif fave.tag == Favorite.Tag.CHECK_AGAIN_LATER and fave.id not in self.scheduled_snipes:
-                if (item := await self.client.get_item(fave.id)).next_drop:
+                if item is None:
+                    item = await self.client.get_item(fave.id)
+                if item.next_drop:
                     await self.client._scheduler.add_schedule(
                         partial(self.snipe, item.id),
                         DateTrigger(item.next_drop.py_datetime()),
