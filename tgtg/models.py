@@ -169,6 +169,10 @@ class Favorite(ColorizeMixin):
                 assert data["short_text"] == tag, data["short_text"]
             return tag
 
+        @property
+        def is_selling(self) -> bool:
+            return self in {self.ENDING_SOON, self.SELLING_FAST, self.X_ITEMS_LEFT}
+
     id: int = field(
         repr=repr_field,  # TODO(https://github.com/ghostty-org/ghostty/issues/904): Remove `repr` when Ghostty word selection is less greedy
         converter=int,

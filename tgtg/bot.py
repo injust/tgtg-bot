@@ -176,7 +176,7 @@ class Bot:
                     and fave.id in self.held_items
                     and fave.num_available == self.held_items[fave.id].quantity
                     and old_fave.tag == Favorite.Tag.SOLD_OUT
-                    and fave.tag in {Favorite.Tag.ENDING_SOON, Favorite.Tag.SELLING_FAST, Favorite.Tag.X_ITEMS_LEFT}
+                    and fave.tag.is_selling
                 ):
                     # Ignore API flapping after reserving an item
                     return
@@ -201,14 +201,11 @@ class Bot:
                             old_fave.tag == Favorite.Tag.SOLD_OUT
                             or old_fave.num_available == self.held_items[fave.id].quantity
                         )
-                        and old_fave.tag
-                        in {
-                            Favorite.Tag.CHECK_AGAIN_LATER,
-                            Favorite.Tag.ENDING_SOON,
-                            Favorite.Tag.SELLING_FAST,
-                            Favorite.Tag.SOLD_OUT,
-                            Favorite.Tag.X_ITEMS_LEFT,
-                        }
+                        and (
+                            old_fave.tag == Favorite.Tag.CHECK_AGAIN_LATER
+                            or old_fave.tag.is_selling
+                            or old_fave.tag == Favorite.Tag.SOLD_OUT
+                        )
                         and fave.tag == Favorite.Tag.SOLD_OUT
                         # Rounding mode is a best guess unless I can test a `Reservation` with exactly half-second `reserved_at` timestamp
                         and fave.sold_out_at == self.held_items[fave.id].reserved_at.round(mode="half_ceil")
