@@ -41,7 +41,7 @@ from .errors import (
     TgtgSoldOutError,
     TgtgUnauthorizedError,
 )
-from .models import Credentials, Item, MultiUseVoucher, Payment, Reservation, Voucher
+from .models import Credentials, Favorite, Item, MultiUseVoucher, Payment, Reservation, Voucher
 from .ntfy import NtfyClient, Priority
 from .utils import (
     HTTPX_LIMITS,
@@ -446,10 +446,10 @@ class TgtgClient(AsyncResource):
     async def return_invitation(self, invitation_id: int) -> JSON:
         return await self._post(TgtgApi.INVITATION_RETURN, invitation_id)
 
-    async def get_favorites(self, pages: Iterable[int] | None = None) -> list[Item]:
+    async def get_favorites(self, pages: Iterable[int] | None = None) -> list[Favorite]:
         return [f async for f in self._get_favorites(pages)]
 
-    async def _get_favorites(self, pages: Iterable[int] | None = None) -> AsyncGenerator[Item]:
+    async def _get_favorites(self, pages: Iterable[int] | None = None) -> AsyncGenerator[Favorite]:
         PAGE_SIZE = 50
         if pages is None:
             pages = count()
@@ -467,7 +467,7 @@ class TgtgClient(AsyncResource):
             )
 
             page = data.get("mobile_bucket", {}).get("items", [])
-            for item in map(Item.from_json, page):
+            for item in map(Favorite.from_json, page):
                 yield item
 
             assert "has_more" not in data
@@ -476,37 +476,37 @@ class TgtgClient(AsyncResource):
 
     async def get_item(self, item_id: int) -> Item:
         data = await self._post(TgtgApi.ITEM_STATUS, item_id, json={"origin": self.LOCATION})
-        return Item.from_json(data)
+        return Item.from_json(data)  # type: ignore[return-value]
 
     @overload
-    async def _set_favorite(self, item: Item, /, *, is_favorite: bool) -> None: ...
+    async def _set_favorite(self, item: Favorite, /, *, is_favorite: bool) -> None: ...
     @overload
     async def _set_favorite(self, item_id: int, /, *, is_favorite: bool) -> None: ...
-    async def _set_favorite(self, item_or_id: Item | int, *, is_favorite: bool) -> None:
-        item_id = item_or_id.id if isinstance(item_or_id, Item) else item_or_id
+    async def _set_favorite(self, item_or_id: Favorite | int, *, is_favorite: bool) -> None:
+        item_id = item_or_id.id if isinstance(item_or_id, Favorite) else item_or_id
 
         await self._post(TgtgApi.ITEM_FAVORITE, item_id, json={"is_favorite": is_favorite})
 
     @overload
-    async def favorite(self, item: Item, /) -> None: ...
+    async def favorite(self, item: Favorite, /) -> None: ...
     @overload
     async def favorite(self, item_id: int, /) -> None: ...
-    async def favorite(self, item_or_id: Item | int) -> None:
+    async def favorite(self, item_or_id: Favorite | int) -> None:
         await self._set_favorite(item_or_id, is_favorite=True)
 
     @overload
-    async def unfavorite(self, item: Item, /) -> None: ...
+    async def unfavorite(self, item: Favorite, /) -> None: ...
     @overload
     async def unfavorite(self, item_id: int, /) -> None: ...
-    async def unfavorite(self, item_or_id: Item | int) -> None:
+    async def unfavorite(self, item_or_id: Favorite | int) -> None:
         await self._set_favorite(item_or_id, is_favorite=False)
 
     @overload
-    async def reserve(self, item: Item, /, quantity: int = 1) -> Reservation: ...
+    async def reserve(self, item: Favorite, /, quantity: int = 1) -> Reservation: ...
     @overload
     async def reserve(self, item_id: int, /, quantity: int = 1) -> Reservation: ...
-    async def reserve(self, item_or_id: Item | int, quantity: int = 1) -> Reservation:
-        item_id = item_or_id.id if isinstance(item_or_id, Item) else item_or_id
+    async def reserve(self, item_or_id: Favorite | int, quantity: int = 1) -> Reservation:
+        item_id = item_or_id.id if isinstance(item_or_id, Favorite) else item_or_id
 
         data = await self._post(TgtgApi.ORDER_CREATE, item_id, json={"item_count": quantity})
 
