@@ -105,7 +105,7 @@ class Bot:
             reservation = await self.client.reserve(held.item_id, held.quantity)
         except TgtgApiError as e:
             logger.error("Item {}<normal>: {!r}</normal>", held.item_id, e)
-            if self.held_items[held.item_id].quantity == held.quantity:
+            if self.held_items[held.item_id] == held:
                 del self.held_items[held.item_id]
             return None
         else:
