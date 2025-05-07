@@ -673,6 +673,7 @@ class TgtgClient(AsyncResource):
         else:
             assert reservation.total_price.decimals == voucher.amount.decimals
 
+        # TODO: 21 vouchers (num_ones=10) caused payment failure
         num_ones = max(4, reservation.total_price.minor_units // voucher.amount.minor_units)
         div, mod = divmod(reservation.total_price.minor_units - num_ones, voucher.amount.minor_units)
         amounts = [voucher.amount.minor_units] * div
