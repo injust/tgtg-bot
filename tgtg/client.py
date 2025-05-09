@@ -43,7 +43,7 @@ from .errors import (
     TgtgUnauthorizedError,
     TgtgValidationError,
 )
-from .models import Credentials, Favorite, Item, MultiUseVoucher, Payment, Reservation, Voucher
+from .models import Credentials, FailedPayment, Favorite, Item, MultiUseVoucher, Payment, Reservation, Voucher
 from .ntfy import NtfyClient, Priority
 from .utils import (
     HTTPX_LIMITS,
@@ -706,7 +706,7 @@ class TgtgClient(AsyncResource):
 
         if any(payment.state == Payment.State.FAILED for payment in payments):
             raise TgtgPaymentError(
-                {payment.failure_reason for payment in payments if payment.state == Payment.State.FAILED}
+                {payment.failure_reason for payment in payments if isinstance(payment, FailedPayment)}
             )
 
         updated_voucher = await self.get_voucher(voucher.id)

@@ -289,10 +289,6 @@ class Item(Favorite):
 
 @frozen(kw_only=True)
 class Payment:
-    class FailureReason(Enum):
-        FAILED = auto()
-        PAYMENT_METHOD_EXPIRED = auto()
-
     class State(Enum):
         AUTHORIZATION_INITIATED = auto()
         AUTHORIZED = auto()
@@ -308,19 +304,27 @@ class Payment:
     )
     payment_provider: str
     state: State = field(repr=repr_field, converter=State.__getitem__)  # type: ignore[misc]
-    failure_reason: FailureReason | None = field(
-        default=None,
-        repr=repr_field,
-        converter=optional(FailureReason.__getitem__),  # type: ignore[misc]
-    )
 
     @classmethod
     @debug
-    def from_json(cls, data: JSON) -> Self:
+    def from_json(cls, data: JSON) -> Payment:
         for key in "order_id", "user_id":
             del data[key]
 
-        return cls(**data)
+        match cls.State[data["state"]]:
+            case cls.State.FAILED:
+                return FailedPayment(**data)
+            case _:
+                return Payment(**data)
+
+
+@frozen(kw_only=True)
+class FailedPayment(Payment):
+    class FailureReason(Enum):
+        FAILED = auto()
+        PAYMENT_METHOD_EXPIRED = auto()
+
+    failure_reason: FailureReason = field(repr=repr_field, converter=FailureReason.__getitem__)  # type: ignore[misc]
 
 
 @frozen(kw_only=True)
