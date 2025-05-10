@@ -160,7 +160,7 @@ class Bot:
 
         for attempt in range(self.SNIPE_MAX_ATTEMPTS):
             item = await self.client.get_item(item_id)
-            if did_item_change := item.num_available or item.tag != Item.Tag.CHECK_AGAIN_LATER:
+            if did_item_change := item.num_available or not item.is_check_again_later:
                 logger.info(f"Snipe attempt {attempt + 1}<normal>: {item.colorize()}</normal>")  # noqa: G004
 
             if item.num_available and (reservation := await self.hold(item)):
@@ -185,8 +185,8 @@ class Bot:
                     return
                 if (
                     old_fave is not None
-                    and old_fave.tag == Favorite.Tag.SOLD_OUT
-                    and fave.tag.is_selling
+                    and old_fave.is_sold_out
+                    and fave.is_selling
                     and any(
                         fave.num_available == reservation.quantity for reservation in reversed(self.held_items[fave.id])
                     )
@@ -195,7 +195,8 @@ class Bot:
                     return
                 if (
                     old_fave is not None
-                    and old_fave.tag == Favorite.Tag.SOLD_OUT == fave.tag
+                    and old_fave.is_sold_out
+                    and fave.is_sold_out
                     and fave.sold_out_at is not None
                     and self.held_items[fave.id]
                     # Rounding mode is a best guess unless I can test a `Reservation` with exactly half-second `reserved_at` timestamp
@@ -209,14 +210,10 @@ class Bot:
                 logger_func = logger.debug if fave.id in items.ignored else logger.info
                 if old_fave is not None:
                     if (
-                        (
-                            old_fave.tag == Favorite.Tag.CHECK_AGAIN_LATER
-                            or old_fave.tag.is_selling
-                            or old_fave.tag == Favorite.Tag.SOLD_OUT
-                        )
-                        and fave.tag == Favorite.Tag.SOLD_OUT
+                        (old_fave.is_check_again_later or old_fave.is_selling or old_fave.is_sold_out)
+                        and fave.is_sold_out
                         and any(
-                            (old_fave.tag == Favorite.Tag.SOLD_OUT or old_fave.num_available == reservation.quantity)
+                            (old_fave.is_sold_out or old_fave.num_available == reservation.quantity)
                             # Rounding mode is a best guess unless I can test a `Reservation` with exactly half-second `reserved_at` timestamp
                             and fave.sold_out_at == reservation.reserved_at.round(mode="half_ceil")
                             for reservation in reversed(self.held_items[fave.id])
@@ -245,9 +242,9 @@ class Bot:
                 if item.num_available:
                     await self.hold(item)
 
-            if fave.tag != Favorite.Tag.CHECK_AGAIN_LATER and self.scheduled_snipes.get(fave.id, True) is None:
+            if not fave.is_check_again_later and self.scheduled_snipes.get(fave.id, True) is None:
                 await self._del_scheduled_snipe(fave.id, conflict_policy=ConflictPolicy.do_nothing)
-            elif fave.tag == Favorite.Tag.CHECK_AGAIN_LATER and fave.id not in self.scheduled_snipes:
+            elif fave.is_check_again_later and fave.id not in self.scheduled_snipes:
                 if item is None:
                     item = await self.client.get_item(fave.id)
                 if item.next_drop:
