@@ -175,10 +175,6 @@ class Favorite(ColorizeMixin):
                 assert data["short_text"] == tag, data["short_text"]
             return tag
 
-        @property
-        def is_selling(self) -> bool:
-            return self in {self.ENDING_SOON, self.SELLING_FAST, self.X_ITEMS_LEFT}
-
     id: int = field(
         repr=repr_field,  # TODO(https://github.com/ghostty-org/ghostty/issues/904): Remove `repr` when Ghostty word selection is less greedy
         converter=int,
@@ -249,6 +245,14 @@ class Favorite(ColorizeMixin):
         fields_ = fields(type(self))
         uninteresting_fields = {fields_.id, fields_.name}
         return not set(self._non_default_fields) <= uninteresting_fields
+
+    @property
+    def is_selling(self) -> bool:
+        return self.tag in {self.Tag.ENDING_SOON, self.Tag.SELLING_FAST, self.Tag.X_ITEMS_LEFT}
+
+    @property
+    def is_sold_out(self) -> bool:
+        return self.tag == self.Tag.SOLD_OUT
 
     def colorize_diff(self, old_item: Self) -> str:
         field_repr: list[str] = []

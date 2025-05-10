@@ -186,8 +186,8 @@ class Bot:
                 if (
                     old_fave is not None
                     and self.held_items[fave.id]
-                    and old_fave.tag == Favorite.Tag.SOLD_OUT
-                    and fave.tag.is_selling
+                    and old_fave.is_sold_out
+                    and fave.is_selling
                     and any(
                         fave.num_available == reservation.quantity for reservation in reversed(self.held_items[fave.id])
                     )
@@ -200,7 +200,8 @@ class Bot:
                 if old_fave is not None:
                     if (
                         self.held_items[fave.id]
-                        and old_fave.tag == Favorite.Tag.SOLD_OUT == fave.tag
+                        and old_fave.is_sold_out
+                        and fave.is_sold_out
                         and fave.sold_out_at is not None
                         # Rounding mode is a best guess unless I can test a `Reservation` with exactly half-second `reserved_at` timestamp
                         and fave.sold_out_at < self.held_items[fave.id][-1].reserved_at.round(mode="half_ceil")
@@ -210,8 +211,8 @@ class Bot:
 
                     if (
                         self.held_items[fave.id]
-                        and old_fave.tag.is_selling
-                        and fave.tag == Favorite.Tag.SOLD_OUT
+                        and old_fave.is_selling
+                        and fave.is_sold_out
                         and any(
                             old_fave.num_available == reservation.quantity
                             # Rounding mode is a best guess unless I can test a `Reservation` with exactly half-second `reserved_at` timestamp
