@@ -60,12 +60,15 @@ class ColorizeMixin:
     def _non_default_fields(self) -> tuple[Attribute[object], ...]:
         return tuple(f for f in fields(type(self)) if getattr(self, f.name) != f.default)
 
+    @property
+    def _non_default_fields_with_values(self) -> tuple[tuple[Attribute[object], object], ...]:
+        return tuple((f, value) for f in fields(type(self)) if (value := getattr(self, f.name)) != f.default)
+
     def colorize(self) -> str:
         field_repr: list[str] = []
 
-        for f in self._non_default_fields:
+        for f, value in self._non_default_fields_with_values:
             if f.repr:
-                value = getattr(self, f.name)
                 repr_func = repr if f.repr is True else f.repr
                 field_repr.append(f"{f.name}=<normal>{repr_func(value)}</normal>")
 
