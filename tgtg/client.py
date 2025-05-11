@@ -550,7 +550,13 @@ class TgtgClient(AsyncResource):
                     raise TgtgLimitExceededError
                 return await self.reserve(item, item.max_quantity)
             case "SUCCESS":
-                return Reservation.from_json(data["order"])
+                reservation = Reservation.from_json(data["order"])
+                if reservation.reserved_at.timestamp_millis() % 1000 == 500:
+                    logger.warning("Check `reserved_at` timestamp rounding behaviour")
+                    await self.ntfy.publish(
+                        "Check `reserved_at` timestamp rounding behaviour", priority=Priority.HIGH, tag="warning"
+                    )
+                return reservation
             case _:
                 raise TgtgApiError(data)
 
