@@ -150,7 +150,7 @@ class Favorite(ColorizeMixin):
     class Tag(StrEnum):
         CHECK_AGAIN_LATER = "Check again later"
         ENDING_SOON = "Ending soon"
-        NOTHING_TO_SAVE_TODAY = "Nothing today"
+        NOTHING_TODAY = "Nothing today"
         SOLD_OUT = "Sold out"
         X_ITEMS_LEFT = "X left"
 
@@ -165,6 +165,8 @@ class Favorite(ColorizeMixin):
                     return None
                 case "GENERIC":
                     tag = cls[data["variant"]]
+                case "NOTHING_TO_SAVE_TODAY":
+                    tag = cls.NOTHING_TODAY
                 case _:
                     tag = cls[data["id"]]
 
@@ -177,7 +179,7 @@ class Favorite(ColorizeMixin):
         converter=int,
     )
     name: str
-    tag: Tag = field(default=Tag.NOTHING_TO_SAVE_TODAY, repr=repr_field)
+    tag: Tag = field(default=Tag.NOTHING_TODAY, repr=repr_field)
     num_available: int = field(default=0, alias="items_available")
     pickup_interval: Interval | None = field(default=None, repr=repr_field, converter=optional(Interval.from_json))  # type: ignore[misc]
     sold_out_at: Instant | None = field(
