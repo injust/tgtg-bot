@@ -239,7 +239,7 @@ class Bot:
             if fave.num_available:
                 item = await self.client.get_item(fave.id)
                 if item.num_available != fave.num_available:
-                    logger.warning(f"Updated<normal>: {item.colorize()}</normal>")  # noqa: G004
+                    logger.warning(f"Updated<normal>: {item.to_favorite().colorize_diff(fave)}</normal>")  # noqa: G004
                 if item.num_available:
                     await self.hold(item)
 
