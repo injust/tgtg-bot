@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 import anyio
+import apscheduler
 import httpx
 from anyio import create_task_group
 from apscheduler import ConflictPolicy
@@ -249,19 +250,23 @@ class Bot:
                 if item is None:
                     item = await self.client.get_item(fave.id)
                 if item.next_drop:
-                    await self.client._scheduler.add_schedule(
-                        partial(self.snipe, item.id),
-                        DateTrigger(item.next_drop.py_datetime()),
-                        id=f"snipe-item-{item.id}",
-                        conflict_policy=ConflictPolicy.exception,
-                    )
-                    local_ts = item.next_drop.to_system_tz()
-                    logger.info(
-                        "Item {}<normal>: Snipe scheduled for {} at {}</normal>",
-                        item.id,
-                        relative_date(local_ts.date()),
-                        format_time(local_ts.time()),
-                    )
+                    try:
+                        await self.client._scheduler.add_schedule(
+                            partial(self.snipe, item.id),
+                            DateTrigger(item.next_drop.py_datetime()),
+                            id=f"snipe-item-{item.id}",
+                            conflict_policy=ConflictPolicy.exception,
+                        )
+                    except apscheduler.ConflictingIdError as e:
+                        logger.error("{!r}", e)
+                    else:
+                        local_ts = item.next_drop.to_system_tz()
+                        logger.info(
+                            "Item {}<normal>: Snipe scheduled for {} at {}</normal>",
+                            item.id,
+                            relative_date(local_ts.date()),
+                            format_time(local_ts.time()),
+                        )
                 else:
                     logger.debug("Item {}<normal>: No upcoming drop</normal>", item.id)
 
