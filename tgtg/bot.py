@@ -31,7 +31,7 @@ from whenever import Instant, TimeDelta, minutes, seconds
 
 from . import items
 from .client import TgtgClient
-from .errors import TgtgApiError, TgtgLimitExceededError, TgtgPaymentError, TgtgSaleClosedError
+from .errors import TgtgApiError, TgtgCaptchaError, TgtgLimitExceededError, TgtgPaymentError, TgtgSaleClosedError
 from .models import Credentials, Favorite, Item, Reservation
 from .utils import format_time, relative_date
 
@@ -276,7 +276,7 @@ class Bot:
             try:
                 async for fave in self.client._get_favorites():
                     tg.start_soon(process_favorite, fave)
-            except httpx.TransportError as e:
+            except (TgtgCaptchaError, httpx.TransportError) as e:
                 logger.error("{!r}", e)
 
     @logger.catch(onerror=lambda _: sys.exit(1))
