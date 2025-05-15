@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import wraps
 from json import JSONDecodeError
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import httpx
 import humanize
@@ -13,13 +13,19 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     import whenever
-    from whenever import Date, Time, TimeDelta
+    from whenever import Date, Instant, Time, TimeDelta
 
 HTTPX_LIMITS = httpx.Limits(
     max_connections=DEFAULT_LIMITS.max_connections,
     max_keepalive_connections=DEFAULT_LIMITS.max_keepalive_connections,
     keepalive_expiry=60,
 )
+
+
+# TODO(https://github.com/ariebovenberg/whenever/issues/37): Replace with whenever's interval type
+class Interval(NamedTuple):
+    start: Instant
+    end: Instant
 
 
 def format_time(time: Time) -> str:
