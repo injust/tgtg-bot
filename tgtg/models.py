@@ -14,7 +14,7 @@ from attrs import Attribute, Converter, asdict, field, fields, frozen
 from attrs.converters import optional
 from babel.numbers import format_currency
 from loguru import logger
-from whenever import Instant, TimeDelta, minutes
+from whenever import Instant, TimeDelta, ZonedDateTime, minutes
 
 from .api import TGTG_BASE_URL
 from .utils import Interval, relative_local_datetime
@@ -205,11 +205,15 @@ class Favorite(ColorizeMixin):
 
             return " ".join(name)
 
-        def build_pickup_interval(pickup_interval: JSON | None) -> Interval | None:
+        def build_pickup_interval(pickup_interval: JSON | None, store: JSON) -> Interval | None:
             if pickup_interval is None:
                 return None
 
-            return Interval(*map(Instant.parse_common_iso, pickup_interval.values()))
+            store_tz: str = store["store_time_zone"]
+            return Interval(
+                ZonedDateTime.parse_common_iso(f"{pickup_interval['start']}[{store_tz}]"),
+                ZonedDateTime.parse_common_iso(f"{pickup_interval['end']}[{store_tz}]"),
+            )
 
         def convert_tags(data: Iterable[JSON]) -> Favorite.Tag:
             tags = list(filter(None, map(cls.Tag.from_json, data)))
@@ -240,7 +244,7 @@ class Favorite(ColorizeMixin):
             id=item["item_id"],
             name=build_name(item, store),
             tag=convert_tags(item_tags),
-            pickup_interval=build_pickup_interval(data.pop("pickup_interval", None)),
+            pickup_interval=build_pickup_interval(data.pop("pickup_interval", None), store),
             packaging=item["packaging_option"],
             **data,
         )
