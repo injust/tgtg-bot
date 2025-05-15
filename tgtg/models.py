@@ -14,7 +14,7 @@ from attrs import Attribute, Converter, asdict, field, fields, frozen
 from attrs.converters import optional
 from babel.numbers import format_currency
 from loguru import logger
-from whenever import Instant, TimeDelta, ZonedDateTime, minutes
+from whenever import Instant, SystemDateTime, TimeDelta, ZonedDateTime, minutes
 
 from .api import TGTG_BASE_URL
 from .utils import Interval, relative_local_datetime
@@ -54,9 +54,20 @@ def repr_field(obj: object) -> str:
             start_date, start_time = relative_local_datetime(obj.start)
             end_date, end_time = relative_local_datetime(obj.end)
 
-            if start_date == end_date:
-                return repr(f"{start_date} {start_time}–{end_time}")  # noqa: RUF001
-            return repr(f"{start_date} at {start_time} to {end_date} at {end_time}")
+            assert obj.start.tz == obj.end.tz, (obj.start.tz, obj.end.tz)
+            if obj.start.offset == SystemDateTime.now().offset == obj.end.offset:
+                start_tz = ""
+                end_tz = ""
+            else:
+                # TODO(https://github.com/ariebovenberg/whenever/issues/60): Use `ZonedDateTime.tzname()`
+                start_tz = " " + cast("str", obj.start.py_datetime().tzname())
+                end_tz = " " + cast("str", obj.end.py_datetime().tzname())
+
+            if start_date != end_date:
+                return repr(f"{start_date} at {start_time}{start_tz} to {end_date} at {end_time}{end_tz}")
+            if start_tz == end_tz:
+                return repr(f"{start_date} {start_time}–{end_time}{end_tz}")  # noqa: RUF001
+            return repr(f"{start_date} {start_time}{start_tz}–{end_time}{end_tz}")  # noqa: RUF001
         case _:
             return repr(str(obj))
 
